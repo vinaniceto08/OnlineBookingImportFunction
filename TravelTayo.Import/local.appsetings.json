@@ -3,9 +3,8 @@
   "Values": {
     "AzureWebJobsStorage": "UseDevelopmentStorage=true",
     "FUNCTIONS_WORKER_RUNTIME": "dotnet",
-    "SqlConnectionString": "Server=tcp:traveltayo.database.windows.net,1433;Database=TravelTayoDb;User ID=marvinaniceto;Password=Carvineros2708!;Encrypt=True;TrustServerCertificate=False;Connection Timeout=30;",
-    "Hotelbeds_ApiKey": "7f4933ee9d114692ad82883fe0083af5",
-    "Hotelbeds_Secret": "873d6e2f44"
+    "SqlConnectionString": "Server=tcp:traveltayo.database.windows.net,1433;Database=TravelTayoDb;User ID=marvinaniceto;Password=Carvineros2708!;Encrypt=True;TrustServerCertificate=False;Connection Timeout=30;"
+ 
   }
 }
 
