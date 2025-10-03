@@ -46,23 +46,20 @@ using Microsoft.Extensions.Hosting;
 using System;
 using TravelTayo.Import.Data;
 
-var host = new HostBuilder()
-    .ConfigureFunctionsWebApplication()
+var host = Host.CreateDefaultBuilder(args)
+    .ConfigureFunctionsWebApplication() // Use this for ASP.NET Core Integration to fix AZFW0014
     .ConfigureServices((context, services) =>
     {
-        var sql = Environment.GetEnvironmentVariable("SqlConnectionString")
-                  ?? throw new InvalidOperationException("SqlConnectionString not found in environment.");
+        var sql = context.Configuration["SqlConnectionString"]
+                  ?? throw new InvalidOperationException("SqlConnectionString not found.");
 
         services.AddDbContext<AppDbContext>(options =>
-            options.UseSqlServer(sql, sqlOptions =>
-            {
-                // configure if needed
-            }));
+            options.UseSqlServer(sql));
 
-        // Named HttpClient (base not required since full URL used)
-        services.AddHttpClient("Hotelbeds");
-
-        // Add logging, etc. (already included by worker)
+        services.AddHttpClient("Hotelbeds", client =>
+        {
+            client.BaseAddress = new Uri("https://api.hotelbeds.com/");
+        });
     })
     .Build();
 
