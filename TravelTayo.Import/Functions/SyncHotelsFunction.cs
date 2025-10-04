@@ -1,16 +1,19 @@
-﻿using System.Net;
-using System.Security.Cryptography;
-using System.Text;
-using System.Text.Json;
-using Azure.Storage.Blobs;
+﻿using Azure.Storage.Blobs;
 using Microsoft.Azure.Functions.Worker;
 using Microsoft.Azure.Functions.Worker.Http;
 using Microsoft.EntityFrameworkCore;
+using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.Logging;
+using System.Net;
+using System.Security.Cryptography;
+using System.Text;
+using System.Text.Json;
 using TravelTayo.Import.Data;
 using TravelTayo.Import.Models;
 
 namespace TravelTayo.Import.Functions;
+
+
 
 public class SyncHotelsFunction
 {
@@ -19,6 +22,14 @@ public class SyncHotelsFunction
     private readonly ILogger _logger;
     private readonly string _apiKey;
     private readonly string _secret;
+
+    private readonly IConfiguration _configuration;
+
+    // Constructor: injected automatically by Functions runtime
+    public HotelImportFunction(IConfiguration configuration)
+    {
+        _configuration = configuration;
+    }
 
     public SyncHotelsFunction(AppDbContext db, IHttpClientFactory httpFactory, ILoggerFactory loggerFactory)
     {
@@ -194,12 +205,16 @@ public class SyncHotelsFunction
         try
         {
             // Azure Blob settings
-            string connectionString = "DefaultEndpointsProtocol=https;AccountName=referralqrcodes;AccountKey=Ibs2KTexxS7x65mOorzll01MnfX3k4Ak6ExEGaJuTaakVSvTElo9HjmvHTuTzEjZdUl/rUpIivMK+AStLD7XqQ==;EndpointSuffix=core.windows.net";
-            string containerName = "hotels";  // your container
-            string blobName = "Hotels.txt";    // file in the container
+            string connectionString = _configuration["BlobConnectionString"]
+                ?? throw new InvalidOperationException("BlobConnectionString not found.");
+            string containerName = _configuration["BlobContainerName"]
+                ?? throw new InvalidOperationException("BlobContainerName not found.");
+            string blobName = _configuration["BlobFileName"]
+                ?? throw new InvalidOperationException("BlobFileName not found.");
 
-            // Create blob client
-            var blobClient = new BlobClient(connectionString, containerName, blobName);
+            var blobServiceClient = new BlobServiceClient(connectionString);
+            var containerClient = blobServiceClient.GetBlobContainerClient(containerName);
+            var blobClient = containerClient.GetBlobClient(blobName);
 
             // Check if blob exists
             if (!await blobClient.ExistsAsync())
@@ -215,7 +230,7 @@ public class SyncHotelsFunction
             using var reader = new StreamReader(stream);
             string content = await reader.ReadToEndAsync();
 
-            // Parse content (assuming it's JSON, like the API)
+            // Parse content (assuming it's JSON)
             using var doc = JsonDocument.Parse(content);
 
             if (!doc.RootElement.TryGetProperty("hotels", out var hotelsElement) || hotelsElement.ValueKind != JsonValueKind.Array)
@@ -223,6 +238,9 @@ public class SyncHotelsFunction
                 _logger.LogWarning("Hotel list not found in blob.");
                 return;
             }
+
+            // Now you can iterate hotelsElement.EnumerateArray()...
+
 
             int processed = 0;
             var batch = new List<Hotel>();
