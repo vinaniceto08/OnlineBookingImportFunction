@@ -194,9 +194,10 @@ public class SyncHotelsFunction
         try
         {
             // Azure Blob settings
-            string connectionString = "";
-            string containerName = "";  // your container
-            string blobName = "";    // file in the container
+
+            string connectionString = Environment.GetEnvironmentVariable("AzureWebJobsStorage");
+            string containerName = Environment.GetEnvironmentVariable("BlobContainerName") ?? "hotels";
+            string blobName = Environment.GetEnvironmentVariable("BlobFileName") ?? "hotels.txt";
 
             // Create blob client
             var blobClient = new BlobClient(connectionString, containerName, blobName);

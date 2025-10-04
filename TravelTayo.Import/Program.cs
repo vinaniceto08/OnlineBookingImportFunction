@@ -40,6 +40,7 @@
 //    .Build();
 
 //host.Run();
+using Azure.Storage.Blobs;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Hosting;
@@ -60,8 +61,14 @@ var host = Host.CreateDefaultBuilder(args)
         {
             client.BaseAddress = new Uri("https://api.hotelbeds.com/");
         });
+
+
+        var blobConnectionString = context.Configuration["AzureWebJobsStorage"]
+                                          ?? throw new InvalidOperationException("BlobConnectionString not found.");
+        services.AddSingleton(x => new BlobServiceClient(blobConnectionString));
     })
     .Build();
+
 
 host.Run();
 
