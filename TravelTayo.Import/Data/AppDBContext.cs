@@ -10,11 +10,9 @@ public class AppDbContext : DbContext
     public DbSet<Hotel> Hotels => Set<Hotel>();
     public DbSet<Country> Countries => Set<Country>();
     public DbSet<State> States => Set<State>();
-    public DbSet<Destination> Destinations => Set<Destination>();
     public DbSet<Zone> Zones => Set<Zone>();
     public DbSet<Category> Categories => Set<Category>();
     public DbSet<CategoryGroup> CategoryGroups => Set<CategoryGroup>();
-    public DbSet<Chain> Chains => Set<Chain>();
     public DbSet<AccommodationType> AccommodationTypes => Set<AccommodationType>();
     public DbSet<Board> Boards => Set<Board>();
     public DbSet<Segment> Segments => Set<Segment>();
@@ -44,11 +42,9 @@ public class AppDbContext : DbContext
         // Simple keys for the rest
         modelBuilder.Entity<Country>().HasKey(c => c.Id);
         modelBuilder.Entity<State>().HasKey(s => s.Id);
-        modelBuilder.Entity<Destination>().HasKey(d => d.Id);
         modelBuilder.Entity<Zone>().HasKey(z => z.Id);
         modelBuilder.Entity<Category>().HasKey(c => c.Id);
         modelBuilder.Entity<CategoryGroup>().HasKey(cg => cg.Id);
-        modelBuilder.Entity<Chain>().HasKey(c => c.Id);
         modelBuilder.Entity<AccommodationType>().HasKey(a => a.Id);
         modelBuilder.Entity<Address>().HasKey(a => a.Id);
         modelBuilder.Entity<Board>().HasKey(b => b.Id);

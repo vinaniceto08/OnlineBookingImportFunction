@@ -27,9 +27,6 @@ public class Hotel
     public int StateId { get; set; }
     public State? State { get; set; }
 
-    public int DestinationId { get; set; }
-    public Destination? Destination { get; set; }
-
     public int ZoneId { get; set; }
     public Zone? Zone { get; set; }
 
@@ -38,9 +35,6 @@ public class Hotel
 
     public int CategoryGroupId { get; set; }
     public CategoryGroup? CategoryGroup { get; set; }
-
-    public int ChainId { get; set; }
-    public Chain? Chain { get; set; }
 
     public int AccommodationTypeId { get; set; }
     public AccommodationType? AccommodationType { get; set; }
@@ -69,16 +63,18 @@ public class Hotel
 
 public class Country { public int Id { get; set; } public string? Code { get; set; } public string? IsoCode { get; set; } public string? Description { get; set; } public List<Hotel>? Hotels { get; set; } }
 public class State { public int Id { get; set; } public string? Code { get; set; } public string? Name { get; set; } public List<Hotel>? Hotels { get; set; } }
-public class Destination { public int Id { get; set; } public string? Code { get; set; } public string? Name { get; set; } public string? CountryCode { get; set; } public List<Hotel>? Hotels { get; set; } }
 public class Zone { public int Id { get; set; } public int ZoneCode { get; set; } public string? Name { get; set; } public string? Description { get; set; } public List<Hotel>? Hotels { get; set; } }
 public class Category { public int Id { get; set; } public string? Code { get; set; } public string? Description { get; set; } public List<Hotel>? Hotels { get; set; } }
 public class CategoryGroup { public int Id { get; set; } public string? Code { get; set; } public string? Description { get; set; } public List<Hotel>? Hotels { get; set; } }
-public class Chain { public int Id { get; set; } public string? Code { get; set; } public string? Description { get; set; } public List<Hotel>? Hotels { get; set; } }
-public class AccommodationType { public int Id { get; set; } public string? Code { get; set; } public string? TypeDescription { get; set; } public string? TypeMultiDescription { get; set; } public List<Hotel>? Hotels { get; set; } }
+public class AccommodationType { public int Id { get; set; } public string? Code { get; set; }  public List<Hotel>? Hotels { get; set; } }
 public class Board { public int Id { get; set; } public string? Code { get; set; } public string? Description { get; set; } }
 public class Segment { public int Id { get; set; } public int Code { get; set; } public string? Description { get; set; } }
 public class Address { public int Id { get; set; } public string? Content { get; set; } public string? Street { get; set; } public string? Number { get; set; } public string? PostalCode { get; set; } public string? City { get; set; } public List<Hotel>? Hotels { get; set; } }
-public class Room { public int Id { get; set; } public string? Name { get; set; } }
+public class Room { 
+    public int Id { get; set; } 
+    public string? roomCode { get; set; } 
+
+}
 public class Facility { public int Id { get; set; } public string? Name { get; set; } }
 public class Terminal { public int Id { get; set; } public string? TerminalCode { get; set; } }
 public class Image { public int Id { get; set; } public string? Path { get; set; } }
