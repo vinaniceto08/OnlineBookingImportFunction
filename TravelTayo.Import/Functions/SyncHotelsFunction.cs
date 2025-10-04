@@ -32,7 +32,7 @@ public class SyncHotelsFunction
 
     // Timer trigger - runs every hour on the hour by default
     [Function("SyncHotelsTimer")]
-    public async Task RunTimer([TimerTrigger("0 0 0 * * *")] string timerInfo)
+    public async Task RunTimer([TimerTrigger("0 * * * * *")] string timerInfo)
     {
         _logger.LogInformation("[Timer] SyncHotelsTimer fired at {time}", DateTime.UtcNow);
         await ProcessAsync();
@@ -196,8 +196,8 @@ public class SyncHotelsFunction
             // Azure Blob settings
 
             string connectionString = Environment.GetEnvironmentVariable("AzureWebJobsStorage");
-            string containerName = Environment.GetEnvironmentVariable("BlobContainerName") ?? "hotels";
-            string blobName = Environment.GetEnvironmentVariable("BlobFileName") ?? "hotels.txt";
+            string containerName = Environment.GetEnvironmentVariable("BlobContainerName");
+            string blobName = Environment.GetEnvironmentVariable("BlobFileName");
 
             // Create blob client
             var blobClient = new BlobClient(connectionString, containerName, blobName);
