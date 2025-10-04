@@ -194,9 +194,9 @@ public class SyncHotelsFunction
         try
         {
             // Azure Blob settings
-            string connectionString = "DefaultEndpointsProtocol=https;AccountName=referralqrcodes;AccountKey=Ibs2KTexxS7x65mOorzll01MnfX3k4Ak6ExEGaJuTaakVSvTElo9HjmvHTuTzEjZdUl/rUpIivMK+AStLD7XqQ==;EndpointSuffix=core.windows.net";
-            string containerName = "hotels";  // your container
-            string blobName = "Hotels.txt";    // file in the container
+            string connectionString = "";
+            string containerName = "";  // your container
+            string blobName = "";    // file in the container
 
             // Create blob client
             var blobClient = new BlobClient(connectionString, containerName, blobName);
