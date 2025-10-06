@@ -1,4 +1,5 @@
-﻿using Microsoft.EntityFrameworkCore;
+﻿using HotelbedsAPI.Models;
+using Microsoft.EntityFrameworkCore;
 using TravelTayo.Import.Models;
 
 namespace TravelTayo.Import.Data;
@@ -17,16 +18,20 @@ public class AppDbContext : DbContext
     public DbSet<Board> Boards => Set<Board>();
     public DbSet<Segment> Segments => Set<Segment>();
     public DbSet<Address> Addresses => Set<Address>();
-    public DbSet<Room> Rooms => Set<Room>();
+    public DbSet<Rooms> Rooms => Set<Rooms>();
     public DbSet<Facility> Facilities => Set<Facility>();
     public DbSet<Terminal> Terminals => Set<Terminal>();
     public DbSet<Image> Images => Set<Image>();
     public DbSet<HotelPhone> HotelPhones => Set<HotelPhone>();
     public DbSet<HotelWildcard> HotelWildcards => Set<HotelWildcard>();
 
+    public DbSet<RoomFacility> RoomFacility => Set<RoomFacility>();
+
     protected override void OnModelCreating(ModelBuilder modelBuilder)
     {
         base.OnModelCreating(modelBuilder);
+
+
 
         modelBuilder.Entity<Hotel>(b =>
         {
@@ -37,6 +42,12 @@ public class AppDbContext : DbContext
             b.Property(h => h.Description).HasMaxLength(2000);
             b.Property(h => h.LastUpdate).HasDefaultValueSql("GETUTCDATE()");
             b.HasIndex(h => h.GiataCode);
+
+            // Relationship with HotelPhone
+            b.HasMany(h => h.Phones)         // navigation property in Hotel
+             .WithOne(p => p.Hotel)          // navigation property in HotelPhone
+             .HasForeignKey(p => p.HotelId)  // foreign key in HotelPhone
+             .OnDelete(DeleteBehavior.Cascade); // optional: delete phones if hotel deleted
         });
 
         // Simple keys for the rest
@@ -48,11 +59,19 @@ public class AppDbContext : DbContext
         modelBuilder.Entity<AccommodationType>().HasKey(a => a.Id);
         modelBuilder.Entity<Address>().HasKey(a => a.Id);
         modelBuilder.Entity<Board>().HasKey(b => b.Id);
-        modelBuilder.Entity<Room>().HasKey(r => r.Id);
+        modelBuilder.Entity<Rooms>().HasKey(r => r.Id);
         modelBuilder.Entity<Facility>().HasKey(f => f.Id);
         modelBuilder.Entity<Terminal>().HasKey(t => t.Id);
         modelBuilder.Entity<Image>().HasKey(i => i.Id);
         modelBuilder.Entity<HotelPhone>().HasKey(p => p.Id);
         modelBuilder.Entity<HotelWildcard>().HasKey(w => w.Id);
+        modelBuilder.Entity<RoomFacility>().HasKey(rf => rf.Id);
+
+        modelBuilder.Entity<HotelPhone>(b =>
+        {
+            b.HasKey(p => p.Id);             // Define the primary key
+            b.Property(p => p.Id)             // Configure the property
+             .ValueGeneratedOnAdd();          // Auto-increment
+        });
     }
 }

@@ -3,6 +3,7 @@ using System.Security.Cryptography;
 using System.Text;
 using System.Text.Json;
 using Azure.Storage.Blobs;
+using HotelbedsAPI.Models;
 using Microsoft.Azure.Functions.Worker;
 using Microsoft.Azure.Functions.Worker.Http;
 using Microsoft.EntityFrameworkCore;
@@ -32,7 +33,7 @@ public class SyncHotelsFunction
 
     // Timer trigger - runs every hour on the hour by default
     [Function("SyncHotelsTimer")]
-    public async Task RunTimer([TimerTrigger("0 0 0 * * *")] string timerInfo)
+    public async Task RunTimer([TimerTrigger("0 0 0 * * *", RunOnStartup = true)] string timerInfo)
     {
         _logger.LogInformation("[Timer] SyncHotelsTimer fired at {time}", DateTime.UtcNow);
         await ProcessAsync();
@@ -193,30 +194,24 @@ public class SyncHotelsFunction
     {
         try
         {
-            // Azure Blob settings
-
             string connectionString = Environment.GetEnvironmentVariable("BlobConnectionString");
             string containerName = Environment.GetEnvironmentVariable("BlobContainerName");
             string blobName = Environment.GetEnvironmentVariable("BlobFileName");
 
-            // Create blob client
             var blobClient = new BlobClient(connectionString, containerName, blobName);
 
-            // Check if blob exists
             if (!await blobClient.ExistsAsync())
             {
                 _logger.LogError("Blob '{blobName}' not found in container '{containerName}'", blobName, containerName);
                 return;
             }
 
-            // Download blob content
             var downloadInfo = await blobClient.DownloadAsync();
 
             using var stream = downloadInfo.Value.Content;
             using var reader = new StreamReader(stream);
             string content = await reader.ReadToEndAsync();
 
-            // Parse content (assuming it's JSON, like the API)
             using var doc = JsonDocument.Parse(content);
 
             if (!doc.RootElement.TryGetProperty("hotels", out var hotelsElement) || hotelsElement.ValueKind != JsonValueKind.Array)
@@ -226,26 +221,24 @@ public class SyncHotelsFunction
             }
 
             int processed = 0;
-            var batch = new List<Hotel>();
 
             foreach (var item in hotelsElement.EnumerateArray())
             {
                 var h = await MapJsonToHotelAsync(item);
                 if (h == null) continue;
 
-                // Upsert logic (same as your current code)
                 Hotel? existing = null;
                 if (h.GiataCode.HasValue)
                 {
                     existing = await _db.Hotels
-                        .Include(x => x.Phones)
-                        .Include(x => x.Wildcards)
-                        .FirstOrDefaultAsync(x => x.GiataCode == h.GiataCode.Value);
+                         .Include(h => h.Phones)                    // include hotel phones
+                         .Include(h => h.Rooms)
+                         .FirstOrDefaultAsync(x => x.GiataCode == h.GiataCode.Value);
                 }
 
                 if (existing != null)
                 {
-                    // Update existing hotel
+                    // --- Update existing hotel ---
                     existing.Name = h.Name;
                     existing.Description = h.Description;
                     existing.Email = h.Email;
@@ -254,44 +247,105 @@ public class SyncHotelsFunction
                     existing.License = h.License;
                     existing.Ranking = h.Ranking;
 
+                    var phonesToDelete = await _db.HotelPhones
+                    .Where(p => p.HotelId == existing.Id)
+                    .ToListAsync();
 
-                    // --- Phones ---
-                    // Remove only existing phones that are in DB
-                    var phonesToDelete = existing.Phones.Where(p => _db.Entry(p).IsKeySet).ToList();
+
                     _db.HotelPhones.RemoveRange(phonesToDelete);
 
-                    // Add new phones
+                    //_db.HotelPhones.RemoveRange(existing.Phones);
                     existing.Phones = h.Phones;
+                    foreach (var phone in existing.Phones) phone.Hotel = existing;
 
-                    // --- Wildcards ---
-                    var wildcardsToDelete = existing.Wildcards.Where(w => _db.Entry(w).IsKeySet).ToList();
-                    _db.HotelWildcards.RemoveRange(wildcardsToDelete);
-                    existing.Wildcards = h.Wildcards;
 
                     _db.Hotels.Update(existing);
                     await _db.SaveChangesAsync();
                 }
                 else
                 {
-
+                    // --- New hotel ---
                     _db.Hotels.Add(h);
-                    await _db.SaveChangesAsync();   // Save parent first to obtain h.Id
+                    await _db.SaveChangesAsync(); // Save to get h.Id
+                    await EnsureRequiredFKsAsync(h);
+                    h.LastUpdate = DateTime.UtcNow;
 
+                    foreach (var phone in h.Phones) phone.Hotel = h;
+                    foreach (var wildcard in h.Wildcards) wildcard.Hotel = h;
 
-                    //... inside `else` block for new hotel...
-                   await EnsureRequiredFKsAsync(h);
-                   h.LastUpdate = DateTime.UtcNow;
+                    // --- Rooms handling ---
+                    var roomsToAdd = new List<Rooms>();
 
+                    if (item.TryGetProperty("rooms", out var roomsElement) && roomsElement.ValueKind == JsonValueKind.Array)
+                    {
+                        foreach (var roomJson in roomsElement.EnumerateArray())
+                        {
+                            var roomCode = roomJson.GetProperty("roomCode").GetString();
+                            if (string.IsNullOrEmpty(roomCode)) continue;
 
-                    // Link each new Phone/Wildcard to the saved Hotel
-                    foreach (var phone in h.Phones) phone.Hotel = h;       // or phone.HotelId = h.Id;
-                    foreach (var wildcard in h.Wildcards) wildcard.Hotel = h; // or wildcard.HotelId = h.Id
+                            var roomEntity = new Rooms
+                            {
+                                RoomCode = roomCode,
+                                HotelId = h.Id,
+                                Hotel = h,
+                                IsParentRoom = roomJson.GetProperty("isParentRoom").GetBoolean(),
+                                MinPax = roomJson.GetProperty("minPax").GetInt32(),
+                                MaxPax = roomJson.GetProperty("maxPax").GetInt32(),
+                                MaxAdults = roomJson.GetProperty("maxAdults").GetInt32(),
+                                MaxChildren = roomJson.GetProperty("maxChildren").GetInt32(),
+                                MinAdults = roomJson.GetProperty("minAdults").GetInt32(),
+                                RoomType = roomJson.GetProperty("roomType").GetString(),
+                                CharacteristicCode = roomJson.GetProperty("characteristicCode").GetString(),
+                                RoomFacilities = new List<RoomFacility>(),
+                                RoomStays = new List<RoomStay>()
+                            };
 
-                    // Add child entities and save them
-                    //_db.HotelPhones.AddRange(h.Phones);
-                    //_db.HotelWildcards.AddRange(h.Wildcards);
-                    //await _db.SaveChangesAsync();
+                            //// --- RoomFacilities ---
+                            //if (roomJson.TryGetProperty("roomFacilities", out var facilitiesElement) && facilitiesElement.ValueKind == JsonValueKind.Array)
+                            //{
+                            //    foreach (var fac in facilitiesElement.EnumerateArray())
+                            //    {
+                            //        roomEntity.RoomFacilities.Add(new RoomFacility
+                            //        {
+                            //            Room = roomEntity,
+                            //            RoomCode = roomEntity.RoomCode,
+                            //            FacilityCode = fac.GetProperty("facilityCode").GetInt32(),
+                            //            FacilityGroupCode = fac.GetProperty("facilityGroupCode").GetInt32(),
+                            //            Number = fac.GetProperty("number").GetInt32(),
+                            //            IndYesOrNo = fac.GetProperty("indYesOrNo").GetBoolean(),
+                            //            Voucher = fac.GetProperty("voucher").GetBoolean()
+                            //        });
+                            //    }
+                            //}
 
+                            //// --- RoomStays ---
+                            //if (roomJson.TryGetProperty("roomStays", out var staysElement) && staysElement.ValueKind == JsonValueKind.Array)
+                            //{
+                            //    foreach (var stay in staysElement.EnumerateArray())
+                            //    {
+                            //        roomEntity.RoomStays.Add(new RoomStay
+                            //        {
+                            //            Room = roomEntity,
+                            //            RoomsRoomCode = roomEntity.RoomCode,
+                            //            StayType = stay.GetProperty("stayType").GetString(),
+                            //            Order = stay.GetProperty("order").GetInt32(),
+                            //            Description = stay.GetProperty("description").GetString()
+                            //        });
+                            //    }
+                            //}
+
+                            roomsToAdd.Add(roomEntity);
+                        }
+
+                        // Batch save all rooms for this hotel
+                        if (roomsToAdd.Any())
+                        {
+                            _db.Rooms.AddRange(roomsToAdd);
+                            if (h.Rooms == null) h.Rooms = new List<Rooms>();
+                            h.Rooms.AddRange(roomsToAdd);
+                            await _db.SaveChangesAsync();
+                        }
+                    }
                 }
 
                 processed++;
@@ -304,6 +358,7 @@ public class SyncHotelsFunction
             _logger.LogError(ex, "Error while processing hotels from blob.");
         }
     }
+
 
 
     private async Task EnsureRequiredFKsAsync(Hotel hotel)
@@ -404,6 +459,27 @@ public class SyncHotelsFunction
                 }
             }
         }
+
+        //if (hotel.Rooms != null && hotel.Rooms.Any())
+        //{
+        //    foreach (var room in hotel.Rooms)
+        //    {
+        //        // Check if room exists for this hotel
+        //        var existingRoom = await _db.Rooms
+        //            .FirstOrDefaultAsync(r => r.RoomCode == room.RoomCode && r.HotelId == hotel.Id);
+
+        //        if (existingRoom == null)
+        //        {
+        //            // Add new room
+        //            room.HotelId = hotel.Id; // set FK
+        //            _db.Rooms.Add(room);
+        //            await _db.SaveChangesAsync(); // save to get room.Id
+        //        }
+
+        //    }
+        //}
+
+        
 
         // Finally, save all changes
         await _db.SaveChangesAsync();
@@ -588,6 +664,56 @@ public class SyncHotelsFunction
 
 
             hotel.LastUpdate = DateTime.Now; // set/update timestamp
+
+            var processedRooms = new Dictionary<string, Rooms>();
+
+            //if (item.TryGetProperty("rooms", out var roomsElement) && roomsElement.ValueKind == JsonValueKind.Array)
+            //{
+            //    await _db.Entry(hotel).Collection(h => h.Rooms).LoadAsync();
+
+            //    foreach (var roomJson in roomsElement.EnumerateArray())
+            //    {
+            //        var roomCode = roomJson.GetProperty("roomCode").GetString();
+            //        if (string.IsNullOrEmpty(roomCode)) continue;
+
+            //        if (!processedRooms.TryGetValue(roomCode, out var roomEntity))
+            //        {
+            //            roomEntity = hotel.Rooms.FirstOrDefault(r => r.RoomCode == roomCode)
+            //                         ?? await _db.Rooms.FirstOrDefaultAsync(r => r.RoomCode == roomCode && r.HotelId == hotel.Id);
+
+            //            if (roomEntity == null)
+            //            {
+            //                roomEntity = new Rooms
+            //                {
+            //                    RoomCode = roomCode,
+            //                    HotelId = hotel.Id,
+            //                    IsParentRoom = roomJson.GetProperty("isParentRoom").GetBoolean(),
+            //                    MinPax = roomJson.GetProperty("minPax").GetInt32(),
+            //                    MaxPax = roomJson.GetProperty("maxPax").GetInt32(),
+            //                    MaxAdults = roomJson.GetProperty("maxAdults").GetInt32(),
+            //                    MaxChildren = roomJson.GetProperty("maxChildren").GetInt32(),
+            //                    MinAdults = roomJson.GetProperty("minAdults").GetInt32(),
+            //                    RoomType = roomJson.GetProperty("roomType").GetString(),
+            //                    CharacteristicCode = roomJson.GetProperty("characteristicCode").GetString(),
+            //                    Hotel = hotel,
+            //                    RoomFacilities = new List<RoomFacility>()
+            //                };
+            //                _db.Rooms.Add(roomEntity);
+            //            }
+
+            //            processedRooms[roomCode] = roomEntity;
+
+            //            if (hotel.Rooms == null)
+            //                hotel.Rooms = new List<Rooms>();
+
+            //            if (!hotel.Rooms.Contains(roomEntity))
+            //                hotel.Rooms.Add(roomEntity);
+            //        }
+            //    }
+            //}
+
+
+
 
             return hotel;
         }

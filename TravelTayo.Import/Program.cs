@@ -61,11 +61,6 @@ var host = Host.CreateDefaultBuilder(args)
         {
             client.BaseAddress = new Uri("https://api.hotelbeds.com/");
         });
-
-
-        var blobConnectionString = context.Configuration["AzureWebJobsStorage"]
-                                          ?? throw new InvalidOperationException("BlobConnectionString not found.");
-        services.AddSingleton(x => new BlobServiceClient(blobConnectionString));
     })
     .Build();
 
